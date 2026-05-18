@@ -1237,7 +1237,7 @@ func setupDirectTest(t *testing.T, userNamespaces []config.UserNamespace, dryRun
 		StateManager: statemanager.NewStateManager(client),
 	}
 
-	informersInstance, err := informers.NewInformers(client, 1*time.Minute, ptr.To(2), dryRun)
+	informersInstance, err := informers.NewInformers(client, 1*time.Minute, ptr.To(2), ptr.To(false), dryRun)
 	require.NoError(t, err)
 
 	go func() { _ = informersInstance.Run(ctx) }()
@@ -1332,7 +1332,7 @@ func setupCustomDrainTest(t *testing.T, customDrainConfig config.CustomDrainConf
 		StateManager: statemanager.NewStateManager(client),
 	}
 
-	informersInstance, err := informers.NewInformers(client, 1*time.Minute, ptr.To(2), false)
+	informersInstance, err := informers.NewInformers(client, 1*time.Minute, ptr.To(2), ptr.To(false), false)
 	require.NoError(t, err)
 
 	go func() { _ = informersInstance.Run(ctx) }()
@@ -2065,7 +2065,7 @@ func TestReconciler_CustomDrainCRDNotFound(t *testing.T) {
 		StateManager: statemanager.NewStateManager(client),
 	}
 
-	informersInstance, err := informers.NewInformers(client, 1*time.Minute, ptr.To(2), false)
+	informersInstance, err := informers.NewInformers(client, 1*time.Minute, ptr.To(2), ptr.To(false), false)
 	require.NoError(t, err)
 
 	go func() { _ = informersInstance.Run(ctx) }()

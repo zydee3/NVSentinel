@@ -53,12 +53,13 @@ type Informers struct {
 	nodeInformer           cache.SharedIndexInformer
 	clientset              kubernetes.Interface
 	notReadyTimeoutMinutes *int
+	drainGPUPods           *bool
 	dryRunMode             []string
 	namespace              string
 }
 
 func NewInformers(clientset kubernetes.Interface, resyncPeriod time.Duration,
-	notReadyTimeoutMinutes *int, dryRun bool) (*Informers, error) {
+	notReadyTimeoutMinutes *int, drainGPUPods *bool, dryRun bool) (*Informers, error) {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(
 		clientset,
 		resyncPeriod,
@@ -104,6 +105,7 @@ func NewInformers(clientset kubernetes.Interface, resyncPeriod time.Duration,
 		eventInformer:          eventInformer,
 		nodeInformer:           nodeInformer,
 		notReadyTimeoutMinutes: notReadyTimeoutMinutes,
+		drainGPUPods:           drainGPUPods,
 		dryRunMode:             dryRunMode,
 		namespace:              metav1.NamespaceDefault,
 	}, nil
@@ -188,6 +190,10 @@ func (i *Informers) FindEvictablePodsInNamespaceAndNode(namespace, nodeName stri
 	}
 
 	pods = i.filterEvictablePods(pods)
+
+	if i.drainGPUPods != nil && *i.drainGPUPods {
+		pods = i.filterPodsWithGPURequests(pods)
+	}
 
 	pods, err = i.filterPodsUsingEntity(pods, partialDrainEntity, nodeName)
 	if err != nil {
@@ -348,6 +354,28 @@ func (i *Informers) filterEvictablePods(pods []*v1.Pod) []*v1.Pod {
 		}
 
 		filteredPods = append(filteredPods, pod)
+	}
+
+	return filteredPods
+}
+
+func (i *Informers) filterPodsWithGPURequests(pods []*v1.Pod) []*v1.Pod {
+	filteredPods := []*v1.Pod{}
+
+	resourceNames := model.EntityTypeToResourceNames["GPU_UUID"]
+
+	for _, pod := range pods {
+		isRequestingGPU := areContainersRequestingDevice(pod.Spec.Containers, resourceNames) ||
+			areContainersRequestingDevice(pod.Spec.InitContainers, resourceNames)
+
+		if isRequestingGPU {
+			slog.Info("Pod is eligible for draining as it is requesting GPU",
+				"pod", pod.Name,
+				"namespace", pod.Namespace,
+				"node", pod.Spec.NodeName,
+			)
+			filteredPods = append(filteredPods, pod)
+		}
 	}
 
 	return filteredPods
